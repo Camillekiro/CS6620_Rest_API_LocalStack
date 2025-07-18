@@ -1,0 +1,17 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY app/ ./app/
+COPY tests/ ./tests/
+COPY instance/ ./instance/
+
+#set environment variables
+ENV FLASK_APP=app/application.py
+ENV FLASK_ENV=production
+
+#run tests
+CMD ["python", "-m", "pytest", "tests/", "-v", "--tb=short"]

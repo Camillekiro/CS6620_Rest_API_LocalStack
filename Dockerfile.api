@@ -1,0 +1,18 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY app/ ./app/
+COPY instance/ ./instance/
+
+EXPOSE 5000
+
+#set environment variables
+ENV FLASK_APP=app/application.py
+ENV FLASK_ENV=production
+
+#create tables and run app
+CMD ["python", "-c", "from app.application import app, db; app.app_context().push(); db.create_all(); app.run(host='0.0.0.0', port=5000)"]
