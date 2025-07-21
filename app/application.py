@@ -1,5 +1,25 @@
 from flask import Flask, request, Blueprint
 from flask_sqlalchemy import SQLAlchemy
+import boto3
+from instance.aws_ddb_setup import initialize_dynamodb
+from instance.aws_s3_setup import initialize_s3
+
+#https://discuss.localstack.cloud/t/set-up-s3-bucket-using-docker-compose/646.html
+s3_client = boto3.client(
+    "s3",
+    endpoint_url="http://localhost:4566",
+    aws_access_key_id="test",
+    aws_secret_access_key="test",
+    region_name="us-east-1"
+)
+
+ddb_client = boto3.client(
+    "dynamodb",
+    endpoint_url="http://localhost:4566",
+    aws_access_key_id="test",
+    aws_secret_access_key="test",
+    region_name="us-east-1"
+)
 
 db = SQLAlchemy()
 app = Flask(__name__)
@@ -108,4 +128,7 @@ def root():
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
+        initialize_s3(s3_client=s3_client, bucket_name='draft-bucket')
+        initialize_dynamodb(dynamodb_client=ddb_client, table_name='drafts')
+
     app.run(debug=True)
