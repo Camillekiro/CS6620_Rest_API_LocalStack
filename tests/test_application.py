@@ -88,5 +88,5 @@ def test_update_draft_record(client, sample_draft_data):
                               data=json.dumps(updates),
                               content_type='application/json')
     data = json.loads(get_response.data)
-    name = data['player_name']
+    name = data['sqlite']['player_name']
     assert name == "John Calgary"
