@@ -45,7 +45,7 @@ def test_get_single_draft_record(client, sample_draft_data):
     assert response.status_code == 200
 
     record = json.loads(response.data)
-    assert data['player_name'] == record['player_name']
+    assert data['player_name'] == record['sqlite']['player_name']
 
 
 def test_create_draft(client, sample_draft_data):
