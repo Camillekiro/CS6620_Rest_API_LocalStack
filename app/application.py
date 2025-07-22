@@ -1,8 +1,13 @@
 from flask import Flask, request, Blueprint
 from flask_sqlalchemy import SQLAlchemy
 import boto3
+import json
 from instance.aws_ddb_setup import initialize_dynamodb
 from instance.aws_s3_setup import initialize_s3
+
+#high level config variables
+S3_BUCKET_NAME='draft-bucket'
+DDB_TABLE_NAME='drafts'
 
 #https://discuss.localstack.cloud/t/set-up-s3-bucket-using-docker-compose/646.html
 s3_client = boto3.client(
@@ -23,7 +28,7 @@ ddb_client = boto3.client(
 
 db = SQLAlchemy()
 app = Flask(__name__)
-# config db
+# configurations for sqlite db
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///data.db"
 app.config["SQLALCHEMY_TRACK_MODIFICATION"] = False
 db.init_app(app)
@@ -34,10 +39,10 @@ class Draft(db.Model):
     draft_pick_number = db.Column(db.String(255), nullable=False)
     pro_team_name = db.Column(db.String(255), nullable=False)
     player_name = db.Column(db.String(255), unique=True, nullable=False)
-    amature_team_name = db.Column(db.String(255))
+    amateur_team_name = db.Column(db.String(255))
 
     def __repr__(self):
-        return f"{self.draft_pick_number} - {self.pro_team_name} - {self.player_name} - {self.amature_team_name}"
+        return f"{self.draft_pick_number} - {self.pro_team_name} - {self.player_name} - {self.amateur_team_name}"
 
 #create API version blueprints
 v1 = Blueprint('v1', __name__, url_prefix='/api/v1')
@@ -49,16 +54,52 @@ def index():
 @v1.route('/drafts')
 def get_drafts():
     drafts = Draft.query.all()
-    output = []
+    sqlite_output = []
     for d in drafts:
         draft_data = {
             "pick_number": d.draft_pick_number,
             "pro_team": d.pro_team_name,
             "player_name": d.player_name,
-            "amature_team": d.amature_team_name
+            "amateur_team": d.amateur_team_name
         }
-        output.append(draft_data)
-    return {"draft_data": output}
+        sqlite_output.append(draft_data)
+    # dynamoDB
+    # https://stackoverflow.com/questions/10450962/how-can-i-fetch-all-items-from-a-dynamodb-table-without-specifying-the-primary-k
+    # https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/dynamodb/client/scan.html
+    dynamodb_output = []
+    try:
+        ddb_draft_response = ddb_client.scan(TableName=DDB_TABLE_NAME)
+        items = ddb_draft_response['Items']
+        for item in items:
+            draft_data={
+                "id": item['id']['N'],
+                "pick_number": item['pick_number']['S'],
+                "pro_team": item['pro_team']['S'],
+                "player_name": item['player_name']['S'],
+                "amateur_team": item['amateur_team']['S']
+            }
+            dynamodb_output.append(draft_data)
+            print(f"Successfull retrieved records from DynamoDB table: {DDB_TABLE_NAME}")
+    except Exception as e:
+        print(f"Error retrieving DynamoDB records: {e}")
+
+    # s3
+    # https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/s3/client/list_objects_v2.html
+    s3_output = []
+    try:
+        s3_draft_response = s3_client.list_objects_v2(Bucket=S3_BUCKET_NAME)
+        if 'Contents' in s3_draft_response:
+            for object in s3_draft_response['Contents']:
+                file_response = s3_client.get_object(Bucket=S3_BUCKET_NAME)
+                draft_data = json.loads(file_response['Body'].read())
+                s3_output.append(draft_data)
+    except Exception as e:
+        print(f"Error retrieving s3 Contents: {e}")
+    return {
+        "sqlite_draft_data": sqlite_output,
+        "dynamo_db_draft_data": dynamodb_output,
+        "s3_draft_data": s3_output
+        }
 
 
 @v1.route('/drafts/<id>')
@@ -68,7 +109,7 @@ def get_draft_record(id):
         "pick_number": draft_rec.draft_pick_number,
         "pro_team": draft_rec.pro_team_name,
         "player_name": draft_rec.player_name,
-        "amature_team": draft_rec.amature_team_name
+        "amateur_team": draft_rec.amateur_team_name
     }
 
 
@@ -77,7 +118,7 @@ def add_draft_record():
     draft_rec = Draft(draft_pick_number=request.json["pick_number"], 
                       pro_team_name=request.json["pro_team"], 
                       player_name=request.json["player_name"], 
-                      amature_team_name=request.json["amature_team"])
+                      amateur_team_name=request.json["amateur_team"])
     db.session.add(draft_rec)
     db.session.commit()
     return {"id": draft_rec.id}, 201
@@ -103,7 +144,7 @@ def update_draft_record(id):
         draft_rec.draft_pick_number = request.json["pick_number"] 
         draft_rec.pro_team_name = request.json["pro_team"]
         draft_rec.player_name = request.json["player_name"]
-        draft_rec.amature_team_name = request.json["amature_team"]
+        draft_rec.amateur_team_name = request.json["amateur_team"]
         db.session.commit()
         return {"message": "Draft record updated succesfully"}, 200
     except KeyError as e:
@@ -128,7 +169,7 @@ def root():
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
-        initialize_s3(s3_client=s3_client, bucket_name='draft-bucket')
-        initialize_dynamodb(dynamodb_client=ddb_client, table_name='drafts')
+        initialize_s3(s3_client=s3_client, bucket_name=S3_BUCKET_NAME)
+        initialize_dynamodb(dynamodb_client=ddb_client, table_name=DDB_TABLE_NAME)
 
     app.run(debug=True)

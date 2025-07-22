@@ -26,7 +26,7 @@ def sample_draft_data():
         "pick_number": "(77)",
         "pro_team": "Boston Celtics",
         "player_name": "John Doe",
-        "amature_team": "Duke"
+        "amateur_team": "Duke"
     }
 
 
@@ -78,7 +78,7 @@ def test_update_draft_record(client, sample_draft_data):
         "pick_number": "(77)",
         "pro_team": "Boston Celtics",
         "player_name": "John Calgary",
-        "amature_team": "Duke"
+        "amateur_team": "Duke"
     }
     put_response = client.put(f'/api/v1/drafts/{draft_id}',
                               data=json.dumps(updates),

@@ -47,13 +47,13 @@ docker stop flask-api-container
 #create a draft
 curl -X POST http://localhost:5000/api/v1/drafts \
   -H "Content-Type: application/json" \
-  -d '{"pick_number": "(1)", "pro_team": "Team A", "player_name": "John Doe", "amature_team": "Northeastern University"}'
+  -d '{"pick_number": "(1)", "pro_team": "Team A", "player_name": "John Doe", "amateur_team": "Northeastern University"}'
 #get all drafts (add an id to get a specific record, example ...drafts/1)
 curl http://localhost:5000/api/v1/drafts
 #update a draft (replace ID 1 with the actual draft ID)
 curl -X PUT http://localhost:5000/api/v1/drafts/1 \
   -H "Content-Type: application/json" \
-  -d '{"pick_number": "(1)", "pro_team": "Updated Team", "player_name": "John Doe", "amature_team": "Updated College"}'
+  -d '{"pick_number": "(1)", "pro_team": "Updated Team", "player_name": "John Doe", "amateur_team": "Updated College"}'
 #delete a draft record (replace ID 1 with the actual draft ID)
 curl -X DELETE http://localhost:5000/api/v1/drafts/1
 ```
