@@ -104,13 +104,48 @@ def get_drafts():
 
 @v1.route('/drafts/<id>')
 def get_draft_record(id):
-    draft_rec = db.get_or_404(Draft, id)
-    return {
-        "pick_number": draft_rec.draft_pick_number,
-        "pro_team": draft_rec.pro_team_name,
-        "player_name": draft_rec.player_name,
-        "amateur_team": draft_rec.amateur_team_name
-    }
+    results = {}
+    try:
+        draft_rec = db.get_or_404(Draft, id)
+        results["sqlite"] = {
+            "id": draft_rec.id,
+            "pick_number": draft_rec.draft_pick_number,
+            "pro_team": draft_rec.pro_team_name,
+            "player_name": draft_rec.player_name,
+            "amateur_team": draft_rec.amateur_team_name
+        }
+    except Exception as e:
+        print(f"Error retrieving record from sqlite db: {e}")
+        results["sqlite"]={"error": "Record not found"}
+    
+    # dynamo db
+    # https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/dynamodb/client/get_item.html
+    try:
+        ddb_response = ddb_client.get_item(TableName=DDB_TABLE_NAME, Key={'id': {'N': str(id)}})
+        if 'Item' in ddb_response:
+            item = ddb_response['Item']
+            results["dynamodb"] = {
+                "id": item['id']['N'],
+                "pick_number": item['pick_number']['S'],
+                "pro_team": item['pro_team']['S'],
+                "player_name": item['player_name']['S'],
+                "amateur_team": item['amateur_team']['S']
+            }
+        else:
+            results["dynamodb"] = {"error": "Record not found"}
+    except Exception as e:
+        print(f"Error retrieving record from dynamodb:{e}")
+        results["dynamodb"] = {"error": "Record not found"}
+
+    # s3
+    # https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/s3/client/get_object.html
+    try:
+        s3_response = s3_client.get_object(Bucket=S3_BUCKET_NAME, key=f'draft_{id}.json')
+        results["s3"] = json.loads(s3_response['Body'].read())
+    except Exception as e:
+        print(f"Error retrieving record from s3:{e}")
+        results["s3"] = {"error": "Record not found"}
+    return results
 
 
 @v1.route('/drafts', methods=['POST'])
