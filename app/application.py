@@ -156,6 +156,43 @@ def add_draft_record():
                       amateur_team_name=request.json["amateur_team"])
     db.session.add(draft_rec)
     db.session.commit()
+    # store the auto incrementing pk generated from sqlalchemy
+    draft_id = draft_rec.id
+    
+    # dynamo db
+    # https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/dynamodb/client/put_item.html
+    try:
+        ddb_client.put_item(
+            TableName=DDB_TABLE_NAME,
+            Item={
+                'id': {'N': str(draft_id)},
+                'draft_pick_number': {'S': request.json["pick_number"]},
+                'pro_team': {'S': request.json["pro_team"]},
+                'player_name': {'S': request.json["player_name"]},
+                'amateur_team': {'S': request.json["amateur_team"]}
+            }
+        )
+    except Exception as e:
+        print(f"DynamoDB put error: {e}")
+
+    # s3
+    # https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/s3/client/put_object.html
+    try:
+        s3_data = {
+            "id": draft_id,
+            "draft_pick_number": request.json["pick_number"],
+            "pro_team": request.json["pro_team"],
+            "player_name": request.json["player_name"],
+            "amateur_team": request.json["amateur_team"]
+        }
+        s3_client.put_object(
+            Bucket=S3_BUCKET_NAME,
+            Key=f'draft_{draft_id}.json',
+            Body=json.dumps(s3_data)
+        )
+    except Exception as e:
+        print(f"S3 put error: {e}")
+
     return {"id": draft_rec.id}, 201
 
 
