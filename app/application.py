@@ -140,7 +140,7 @@ def get_draft_record(id):
     # s3
     # https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/s3/client/get_object.html
     try:
-        s3_response = s3_client.get_object(Bucket=S3_BUCKET_NAME, key=f'draft_{id}.json')
+        s3_response = s3_client.get_object(Bucket=S3_BUCKET_NAME, Key=f'draft_{id}.json')
         results["s3"] = json.loads(s3_response['Body'].read())
     except Exception as e:
         print(f"Error retrieving record from s3:{e}")
@@ -166,7 +166,7 @@ def add_draft_record():
             TableName=DDB_TABLE_NAME,
             Item={
                 'id': {'N': str(draft_id)},
-                'draft_pick_number': {'S': request.json["pick_number"]},
+                'pick_number': {'S': request.json["pick_number"]},
                 'pro_team': {'S': request.json["pro_team"]},
                 'player_name': {'S': request.json["player_name"]},
                 'amateur_team': {'S': request.json["amateur_team"]}

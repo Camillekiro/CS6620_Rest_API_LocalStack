@@ -1,4 +1,3 @@
-# https://docs.docker.com/compose/intro/compose-application-model/#key-commands
 services:
   localstack:
     image: localstack/localstack
@@ -10,4 +9,9 @@ services:
       - 4566:4566
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock"
-      - "./.volume:/var/lib/localstack"
+  tests:
+    build:
+      context: .
+      dockerfile: dockerfile.tests
+    depends_on:
+      - localstack
