@@ -10,6 +10,7 @@ from app.application import app, db, Draft, s3_client, ddb_client, S3_BUCKET_NAM
 from instance.aws_s3_setup import initialize_s3
 from instance.aws_ddb_setup import initialize_dynamodb
 
+
 @pytest.fixture
 def client():
     """Create a test client and set up test db"""
@@ -34,6 +35,7 @@ def sample_draft_data():
         "amateur_team": "Duke"
     }
 
+
 @pytest.fixture
 def duplicate_draft_data():
     return {
@@ -42,6 +44,21 @@ def duplicate_draft_data():
         "player_name": "John Doe",
         "amateur_team": "Duke"
     }
+
+
+def test_get_no_param(client):
+    response = client.get(f'/api/v1/drafts')
+    assert response.status_code == 200
+    data = json.loads(response.data)
+
+    assert 'sqlite_draft_data' in data
+    assert 'dynamo_db_draft_data' in data
+    assert 's3_draft_data' in data
+
+    # all storage systems should have a list with lenght of 0
+    assert len(data['sqlite_draft_data']) == 0
+    assert len(data['dynamo_db_draft_data']) == 0
+    assert len(data['s3_draft_data']) == 0
 
 
 def test_get_all_drafts(client):
@@ -64,8 +81,48 @@ def test_get_single_draft_record(client, sample_draft_data):
     assert response.status_code == 200
 
     record = json.loads(response.data)
-    assert data['player_name'] == record['sqlite']['player_name']
+    # validate that the record was stored in all 3 storage systems
+    assert 'sqlite' in record
+    assert 'dynamodb' in record
+    assert 's3' in record
+        
+    # validate values in sqlite db
+    if 'error' not in record['sqlite']:
+        assert data['pick_number'] == record['sqlite']['pick_number']
+        assert data['pro_team'] == record['sqlite']['pro_team']
+        assert data['player_name'] == record['sqlite']['player_name']
+        assert data['amateur_team'] == record['sqlite']['amateur_team']
 
+    # validate the values in s3 and dynamodb
+    if 'error' not in record['s3']:
+        assert data['pick_number'] == record['s3']['pick_number']
+        assert data['pro_team'] == record['s3']['pro_team']
+        assert data['player_name'] == record['s3']['player_name']
+        assert data['amateur_team'] == record['s3']['amateur_team']    
+
+    if 'error' not in record['dynamodb']:
+        assert data['pick_number'] == record['dynamodb']['pick_number']
+        assert data['pro_team'] == record['dynamodb']['pro_team']
+        assert data['player_name'] == record['dynamodb']['player_name']
+        assert data['amateur_team'] == record['dynamodb']['amateur_team']    
+
+
+def test_get_no_results(client):
+    response = client.get(f'/api/v1/drafts/555')
+    assert response.status_code == 200
+    data = json.loads(response.data)
+    assert 'error' in data['sqlite']
+    assert 'error' in data['s3']
+    assert 'error' in data['dynamodb']
+
+
+def test_get_incorrect_param(client):
+    response = client.get(f'/api/v1/drafts/get_me')
+    assert response.status_code == 200
+    data = json.loads(response.data)
+    assert 'error' in data['sqlite']
+    assert 'error' in data['s3']
+    assert 'error' in data['dynamodb']
 
 def test_create_draft(client, sample_draft_data):
     data = sample_draft_data
