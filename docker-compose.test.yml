@@ -4,14 +4,8 @@ services:
     environment:
       - AWS_DEFAULT_REGION=us-east-1
       - GATEWAY_LISTEN=0.0.0.0:4566
-      - SERVICES=s3, dynamodb
+      - SERVICES=s3,dynamodb
     ports:
       - 4566:4566
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock"
-  tests:
-    build:
-      context: .
-      dockerfile: dockerfile.tests
-    depends_on:
-      - localstack
