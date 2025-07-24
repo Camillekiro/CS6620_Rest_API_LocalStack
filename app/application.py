@@ -180,7 +180,7 @@ def add_draft_record():
     try:
         s3_data = {
             "id": draft_id,
-            "draft_pick_number": request.json["pick_number"],
+            "pick_number": request.json["pick_number"],
             "pro_team": request.json["pro_team"],
             "player_name": request.json["player_name"],
             "amateur_team": request.json["amateur_team"]
