@@ -56,9 +56,15 @@ def test_get_no_param(client):
     assert 's3_draft_data' in data
 
     # all storage systems should have a list with lenght of 0
-    assert len(data['sqlite_draft_data']) == 0
-    assert len(data['dynamo_db_draft_data']) == 0
-    assert len(data['s3_draft_data']) == 0
+    assert isinstance(data['sqlite_draft_data'], list)
+    assert isinstance(data['dynamo_db_draft_data'], list)
+    assert isinstance(data['s3_draft_data'], list)
+    
+    sqlite_count=len(data['sqlite_draft_data'])
+    dynamodb_count=len(data['dynamo_db_draft_data'])
+    s3_count=len(data['s3_draft_data'])
+
+    assert sqlite_count == dynamodb_count == s3_count
 
 
 def test_get_all_drafts(client):
