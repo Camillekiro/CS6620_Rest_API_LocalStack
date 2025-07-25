@@ -202,27 +202,107 @@ def add_draft_record():
 
 @v1.route('/drafts/<id>', methods=['DELETE'])
 def delete_draft_record(id):
+    # existence validation
     draft_rec = db.get_or_404(Draft, id)
-    if draft_rec is None:
-        return {"message": "record not found"}, 404
+    # s3
+    try:
+        s3_client.get_object(Bucket=S3_BUCKET_NAME, Key=f'draft_{id}.json')
+    except s3_client.exceptions.NoSuchKey:
+        return {"message": "s3 object not found"}, 404
+
+    # dynamodb
+    try:
+        ddb_response = ddb_client.get_item(TableName=DDB_TABLE_NAME, Key={'id': {'N': str(id)}})
+        if 'Item' not in ddb_response:
+            return {"message": "dynamodb item not found"}, 404
+    except Exception as e:
+        print(f"Error during dynamodb get operation:{e}")
+        return {"message": "Error during dynamodb get operation"}, 500
     
+    # delete from all 3 storage systems after validating existence
     db.session.delete(draft_rec)
     db.session.commit()
-    return {"message": "Successful Delete!"}, 200
+    # s3
+    # https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/s3/client/delete_object.html
+    try:
+        s3_client.delete_object(Bucket=S3_BUCKET_NAME, Key=f'draft_{id}.json')
+    except Exception as e:
+        print(f"Error occured during S3 object deletion: {e}")
+        return {"message": "Error occured during s3 delete operation"}, 500
+
+    # ddb
+    # https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/dynamodb/client/delete_item.html
+
+    try:
+        ddb_client.delete_item(TableName=DDB_TABLE_NAME, Key={'id': {'N': str(id)}})
+    except Exception as e:
+        print(f"Error occured during DynamoDB item deletion: {e}")
+        return {"message": "Error occured during DynamoDB delete operation"}, 500
+
+    return {"message": "Successful deleted record from all storage systems!"}, 200
 
 
 @v1.route('/drafts/<id>', methods=['PUT'])
 def update_draft_record(id):
+    # existence validation
     draft_rec = db.get_or_404(Draft, id)
     if not request.json:
         return {"error": "No JSON data provided"}, 400
+    # s3
+    try:
+        s3_client.get_object(Bucket=S3_BUCKET_NAME, Key=f'draft_{id}.json')
+    except s3_client.exceptions.NoSuchKey:
+        return {"message": "s3 object not found"}, 404
+
+    # dynamodb
+    try:
+        ddb_response = ddb_client.get_item(TableName=DDB_TABLE_NAME, Key={'id': {'N': str(id)}})
+        if 'Item' not in ddb_response:
+            return {"message": "dynamodb item not found"}, 404
+    except Exception as e:
+        print(f"Error during dynamodb get operation:{e}")
+        return {"message": "Error during dynamodb get operation"}, 500
+    # update all 3 storage systems
     try:
         draft_rec.draft_pick_number = request.json["pick_number"] 
         draft_rec.pro_team_name = request.json["pro_team"]
         draft_rec.player_name = request.json["player_name"]
         draft_rec.amateur_team_name = request.json["amateur_team"]
         db.session.commit()
-        return {"message": "Draft record updated succesfully"}, 200
+
+        try:
+            s3_data = {
+                "id": int(id),
+                "pick_number": request.json["pick_number"],
+                "pro_team": request.json["pro_team"],
+                "player_name": request.json["player_name"],
+                "amateur_team": request.json["amateur_team"]
+            }
+            s3_client.put_object(
+                Bucket=S3_BUCKET_NAME,
+                Key=f'draft_{id}.json',
+                Body=json.dumps(s3_data)
+            )
+        except Exception as e:
+            print(f"Error occurred during S3 object update: {e}")
+            return {"message": "Error occured during S3 update operation"}, 500
+        
+        try:
+            ddb_client.put_item(
+                TableName=DDB_TABLE_NAME,
+                Item={
+                    "id": {'N': str(id)},
+                    "pick_number": {'S': request.json["pick_number"]},
+                    "pro_team": {'S': request.json["pro_team"]},
+                    "player_name": {'S': request.json["player_name"]},
+                    "amateur_team": {'S': request.json["amateur_team"]}
+                }
+            )
+        except Exception as e:
+            print(f"Error occurred during DynamoDB item update: {e}")
+            return {"message": "Error occured during DynamoDB update operation"}, 500
+            
+        return {"message": "Draft record updated succesfully on all storage systems!"}, 200
     except KeyError as e:
         return {"error": f"missing requried field: {e}"}, 400
     except Exception as e:
