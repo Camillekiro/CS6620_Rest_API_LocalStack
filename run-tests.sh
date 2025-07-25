@@ -1,19 +1,21 @@
 #!/bin/bash
 
-echo "Building test Docker image"
-docker build -f Dockerfile.tests -t flask-tests:latest .
+echo "Starting LocalStack service"
+docker-compose -f docker-compose.test.yml up -d
+
+echo "Waiting for services to start up"
+sleep 10
 
 echo "Running tests"
-docker run --rm flask-tests:latest
-
-#to capture exit code
+python -m pytest tests/ -v
 EXIT_CODE=$?
 
+docker-compose -f docker-compose.test.yml down
+
 if [ $EXIT_CODE -eq 0 ]; then 
-    echo "All tests passed!"
+    echo "Tests passed!"
 else
     echo "Tests failed!"
 fi
 
-#exit with the same code as the tests
 exit $EXIT_CODE
