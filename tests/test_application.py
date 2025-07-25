@@ -174,14 +174,41 @@ def test_duplicate_post(client, sample_draft_data, duplicate_draft_data):
     assert post_response2.status_code == 409
 
 
-def test_create_draft(client, sample_draft_data):
-    data = sample_draft_data
+def test_create_draft_record(client, sample_draft_data):
     response = client.post('/api/v1/drafts', 
                            data=json.dumps(sample_draft_data),
                            content_type='application/json')    
     assert response.status_code == 201
-    data = json.loads(response.data)
-    assert 'id' in data
+    response_data = json.loads(response.data)
+    assert 'id' in response_data
+    draft_id = response_data['id']
+    
+    get_response = client.get(f'/api/v1/drafts/{draft_id}')
+    assert get_response.status_code == 200
+
+    stored_data = json.loads(get_response.data)
+
+    #verify that the data was stored in all 3 storage systems
+    assert 'sqlite' in stored_data
+    if 'error' not in stored_data['sqlite']:
+        assert stored_data['sqlite']['pick_number'] == sample_draft_data['pick_number']
+        assert stored_data['sqlite']['pro_team'] == sample_draft_data['pro_team']
+        assert stored_data['sqlite']['player_name'] == sample_draft_data['player_name']
+        assert stored_data['sqlite']['amateur_team'] == sample_draft_data['amateur_team']
+
+    assert 's3' in stored_data
+    if 'error' not in stored_data['s3']:
+        assert stored_data['s3']['pick_number'] == sample_draft_data['pick_number']
+        assert stored_data['s3']['pro_team'] == sample_draft_data['pro_team']
+        assert stored_data['s3']['player_name'] == sample_draft_data['player_name']
+        assert stored_data['s3']['amateur_team'] == sample_draft_data['amateur_team']
+
+    assert 'dynamodb' in stored_data
+    if 'error' not in stored_data['dynamodb']:
+        assert stored_data['dynamodb']['pick_number'] == sample_draft_data['pick_number']
+        assert stored_data['dynamodb']['pro_team'] == sample_draft_data['pro_team']
+        assert stored_data['dynamodb']['player_name'] == sample_draft_data['player_name']
+        assert stored_data['dynamodb']['amateur_team'] == sample_draft_data['amateur_team']
 
 
 def test_delete_draft_record(client, sample_draft_data):
@@ -193,6 +220,25 @@ def test_delete_draft_record(client, sample_draft_data):
                              data=json.dumps(sample_draft_data),
                              content_type='application/json')
     assert response.status_code == 200
+
+    # validate that record was deleted
+    get_resposne_after_delete = client.get(f'/api/v1/drafts/{draft_id}')
+    assert get_resposne_after_delete.status_code == 200
+
+    data = json.loads(get_resposne_after_delete.data)
+
+    assert 'sqlite' in data
+    assert 'error' in data['sqlite']
+
+    assert 's3' in data
+    assert 'error' in data['s3']
+
+    assert 'dynamodb' in data
+    assert 'error' in data['dynamodb']
+
+def test_delete_draft_invalid_target(client):
+    response = client.delete('/api/v1/drafts/555')
+    assert response.status_code == 404
 
 
 def test_update_draft_record(client, sample_draft_data):
@@ -210,9 +256,24 @@ def test_update_draft_record(client, sample_draft_data):
                               data=json.dumps(updates),
                               content_type='application/json')
     assert put_response.status_code == 200
-    get_response = client.get(f'/api/v1/drafts/{draft_id}',
-                              data=json.dumps(updates),
-                              content_type='application/json')
+
+    get_response = client.get(f'/api/v1/drafts/{draft_id}')
+    assert get_response.status_code == 200
+
     data = json.loads(get_response.data)
     name = data['sqlite']['player_name']
     assert name == "John Calgary"
+    assert data['s3']['player_name'] == "John Calgary"
+    assert data['dynamodb']['player_name'] == "John Calgary"
+
+def test_update_draft_invalid_target(client):
+    updates = {
+        "pick_number": "(555)",
+        "pro_team": "NONE",
+        "player_name": "NONE",
+        "amateur_team": "NONE"
+    }
+    response = client.put('/api/v1/drafts/4545445',
+                          data=json.dumps(updates),
+                          content_type='application/json')
+    assert response.status_code == 404
