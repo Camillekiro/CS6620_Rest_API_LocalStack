@@ -150,6 +150,10 @@ def get_draft_record(id):
 
 @v1.route('/drafts', methods=['POST'])
 def add_draft_record():
+    # dupe check
+    dupe_player = Draft.query.filter_by(player_name=request.json["player_name"]).first()
+    if dupe_player:
+        return {"error": "Player already exists in draft db"}, 409
     draft_rec = Draft(draft_pick_number=request.json["pick_number"], 
                       pro_team_name=request.json["pro_team"], 
                       player_name=request.json["player_name"], 

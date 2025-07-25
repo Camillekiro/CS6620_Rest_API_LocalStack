@@ -124,6 +124,56 @@ def test_get_incorrect_param(client):
     assert 'error' in data['s3']
     assert 'error' in data['dynamodb']
 
+
+def test_post_expected_data(client, sample_draft_data):
+    post_response = client.post('/api/v1/drafts',
+                       data=json.dumps(sample_draft_data),
+                       content_type='application/json')
+    assert post_response.status_code == 201
+    response_data = json.loads(post_response.data)
+    assert 'id' in response_data
+    # store the draft id
+    draft_id = response_data['id']
+
+    # validate that draft record was stored in all 3 systems
+    get_response = client.get(f'/api/v1/drafts/{draft_id}')
+    assert get_response.status_code == 200
+
+    record = json.loads(get_response.data)
+    # validate record content in each storage system
+    assert 'sqlite' in record
+    if 'error' not in record['sqlite']:
+        assert record['sqlite']['pick_number'] == sample_draft_data['pick_number']
+        assert record['sqlite']['pro_team'] == sample_draft_data['pro_team']
+        assert record['sqlite']['player_name'] == sample_draft_data['player_name']
+        assert record['sqlite']['amateur_team'] == sample_draft_data['amateur_team']
+    
+    assert 's3' in record
+    if 'error' not in record['s3']:
+        assert record['s3']['pick_number'] == sample_draft_data['pick_number']
+        assert record['s3']['pro_team'] == sample_draft_data['pro_team']
+        assert record['s3']['player_name'] == sample_draft_data['player_name']
+        assert record['s3']['amateur_team'] == sample_draft_data['amateur_team']
+
+    assert 'dynamodb' in record
+    if 'error' not in record['dynamodb']:
+        assert record['dynamodb']['pick_number'] == sample_draft_data['pick_number']
+        assert record['dynamodb']['pro_team'] == sample_draft_data['pro_team']
+        assert record['dynamodb']['player_name'] == sample_draft_data['player_name']
+        assert record['dynamodb']['amateur_team'] == sample_draft_data['amateur_team']
+
+def test_duplicate_post(client, sample_draft_data, duplicate_draft_data):
+    post_response1 = client.post('/api/v1/drafts',
+                       data=json.dumps(sample_draft_data),
+                       content_type='application/json')
+    assert post_response1.status_code == 201
+    
+    post_response2 = client.post('/api/v1/drafts',
+                       data=json.dumps(duplicate_draft_data),
+                       content_type='application/json')
+    assert post_response2.status_code == 409
+
+
 def test_create_draft(client, sample_draft_data):
     data = sample_draft_data
     response = client.post('/api/v1/drafts', 
